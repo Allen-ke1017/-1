@@ -1,0 +1,74 @@
+function doGet(e) {
+  // 取得前端網頁傳遞過來的 id 參數
+  const id = e.parameter.id;
+  
+  // 若未傳入 ID，回傳提示訊息
+  if (!id) {
+    return ContentService.createTextOutput("❌ 錯誤：未讀取到設備編號！");
+  }
+
+  // 取得目前綁定的 Google 試算表
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // ⚠️ 請確認您的工作表名稱是否為 "設備清單"，若不同請修改此處
+  const sheet = spreadsheet.getSheetByName("設備清單");
+  
+  if (!sheet) {
+    return ContentService.createTextOutput("❌ 系統錯誤：找不到「設備清單」工作表！");
+  }
+
+  // 取得工作表中所有的資料
+  const data = sheet.getDataRange().getValues();
+  
+  /*
+     假設試算表欄位結構如下：
+     - A 欄 (index 0): 設備編號
+     - B 欄 (index 1): 設備名稱
+     - C 欄 (index 2): 目前狀態 ("可借用" 或 "已借出")
+     - D 欄 (index 3): 最後異動時間
+  */
+
+  let foundRow = -1;
+  let equipmentName = "";
+  let currentStatus = "";
+
+  // 從第二列開始比對 (避開第一列標題)
+  for (let i = 1; i < data.length; i++) {
+    // 轉成字串並去空白進行比對
+    if (data[i][0].toString().trim() === id.toString().trim()) {
+      foundRow = i + 1; // 試算表的列數從 1 開始计算
+      equipmentName = data[i][1];
+      currentStatus = data[i][2];
+      break;
+    }
+  }
+
+  // 若比對不到對應的設備編號
+  if (foundRow === -1) {
+    return ContentService.createTextOutput(`❌ 找不到設備編號：${id}`);
+  }
+
+  // 格式化當前時間 (台北時間)
+  const now = new Date();
+  const timeString = Utilities.formatDate(now, "GMT+8", "yyyy-MM-dd HH:mm:ss");
+
+  // 判斷當前狀態並進行切換
+  if (currentStatus === "已借出") {
+    // ---------------- 歸還流程 ----------------
+    sheet.getRange(foundRow, 3).setValue("可借用"); // C 欄更新為可借用
+    sheet.getRange(foundRow, 4).setValue(timeString); // D 欄更新異動時間
+
+    return ContentService.createTextOutput(
+      `✅ 歸還成功！\n設備：${equipmentName}\n目前狀態：可借用\n時間：${timeString}`
+    );
+
+  } else {
+    // ---------------- 借用流程 ----------------
+    sheet.getRange(foundRow, 3).setValue("已借出"); // C 欄更新為已借出
+    sheet.getRange(foundRow, 4).setValue(timeString); // D 欄更新異動時間
+
+    return ContentService.createTextOutput(
+      `✅ 借用成功！\n設備：${equipmentName}\n目前狀態：已借出\n時間：${timeString}`
+    );
+  }
+}
